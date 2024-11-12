@@ -61,3 +61,20 @@ public class WeaponConsumer : MonoBehaviour
 ```
 
 3. Interface implementors only need to implement the interface — no additional setup required.
+```cs
+public class WeaponA : MonoBehaviour, IWeapon
+{
+	public void Attack()
+	{
+		Debug.Log("AAAAAAAAAA");
+	}
+}
+
+public class WeaponSO : ScriptableObject, IWeapon
+{
+	public void Attack()
+	{
+		Debug.Log("SOOOOOOOO);
+	}
+}
+```
