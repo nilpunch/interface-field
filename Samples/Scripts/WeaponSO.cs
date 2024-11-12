@@ -6,7 +6,7 @@ namespace InterfaceField.Samples
 	{
 		public void Attack()
 		{
-			Debug.Log("I Am SO");
+			Debug.Log("SOOOOOOOO");
 		}
 	}
 }
