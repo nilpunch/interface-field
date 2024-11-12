@@ -2,8 +2,8 @@
 
 ![image](https://github.com/user-attachments/assets/c591803c-8430-4ff3-a533-d92c3de01809)
 
-A Unity package for serializing UnityEngine.Object using an interface field.  
-This leverages decompiled UnityEditor code, so stability may vary.
+Unity package for serializing UnityEngine.Object using an interface field.  
+Leverages decompiled UnityEditor code, so stability may vary.
 
 Refer to the [samples](https://github.com/nilpunch/interface-field/tree/master/Samples) for a quick start.
 
