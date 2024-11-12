@@ -4,44 +4,29 @@ using System.Reflection;
 using Plugins.InterfaceObjectField.Runtime;
 using UnityEditor;
 using UnityEditor.SceneManagement;
+using UnityEditor.UIElements;
 using UnityEngine;
 using Object = UnityEngine.Object;
 
-[CustomPropertyDrawer(typeof(InterfaceFieldAttribute))]
+[CustomPropertyDrawer(typeof(ProxyAttribute))]
 public class InterfaceFieldDrawer : PropertyDrawer
 {
 	public override void OnGUI(Rect position, SerializedProperty property, GUIContent label)
 	{
 		var interfaceType = fieldInfo.FieldType;
-		
-		label = EditorGUI.BeginProperty(position, label, property);
-		ObjectFieldInternal(position, property, interfaceType, label, EditorStyles.objectField, null);
-		EditorGUI.EndProperty();
-	}
 
-	public static Type GetType(SerializedProperty property)
-	{
-		Type parentType = property.serializedObject.targetObject.GetType();
-		FieldInfo fi = GetFieldViaPath(parentType, property.propertyPath);
-		return fi.FieldType;
-	}
-
-	public static FieldInfo GetFieldViaPath(Type type,string path)
-	{
-		Type parentType = type;
-		FieldInfo fi = type.GetField(path);
-		string[] perDot = path.Split('.');
-		foreach (string fieldName in perDot)
+		if (property.boxedValue == null)
 		{
-			fi = parentType.GetField(fieldName);
-			if (fi != null)
-				parentType = fi.FieldType;
-			else
-				return null;
+			var proxy = fieldInfo.GetCustomAttribute<ProxyAttribute>().ProxyType;
+			property.boxedValue = Activator.CreateInstance(proxy);
+			property.serializedObject.ApplyModifiedPropertiesWithoutUndo();
 		}
-		if (fi != null)
-			return fi;
-		else return null;
+
+		var objectField = property.FindPropertyRelative("Object");
+
+		label = EditorGUI.BeginProperty(position, label, objectField);
+		ObjectFieldInternal(position, objectField, interfaceType, label, EditorStyles.objectField, null);
+		EditorGUI.EndProperty();
 	}
 
 	private static void ObjectFieldInternal(
@@ -104,17 +89,6 @@ public class InterfaceFieldDrawer : PropertyDrawer
 				EditorGUIUtility.SetIconSize(new Vector2(64f, 64f));
 				break;
 		}
-		// if ((eventType == EventType.MouseDown && Event.current.button == 1 ||
-		//      eventType == EventType.ContextClick && visualType == ObjectFieldVisualType.IconAndText) && position.Contains(Event.current.mousePosition))
-		// {
-		// 	Object actualObject = property != null ? property.objectReferenceValue : obj;
-		// 	GenericMenu menu = new GenericMenu();
-		// 	if (EditorGUI.FillPropertyContextMenu(property, menu: menu) != null)
-		// 		menu.AddSeparator("");
-		// 	menu.AddItem(GUIContent.Temp("Properties..."), false, () => PropertyEditor.OpenPropertyEditor(actualObject));
-		// 	menu.DropDown(position);
-		// 	Event.current.Use();
-		// }
 		switch (eventType)
 		{
 			case EventType.MouseDown:
@@ -127,7 +101,8 @@ public class InterfaceFieldDrawer : PropertyDrawer
 						if (GUI.enabled)
 						{
 							GUIUtility.keyboardControl = id;
-							ObjectSelectorShow(objType, property, allowSceneObjects, onObjectSelectorClosed: onObjectSelectorClosed, onObjectSelectedUpdated: onObjectSelectedUpdated);
+							ObjectSelectorShow(property.objectReferenceValue, objType, property.serializedObject.targetObject, allowSceneObjects, onObjectSelectorClosed: onObjectSelectorClosed,
+								onObjectSelectedUpdated: onObjectSelectedUpdated);
 							ObjectSelectorSetSelectorId(id);
 							current.Use();
 							GUIUtility.ExitGUI();
@@ -275,80 +250,85 @@ public class InterfaceFieldDrawer : PropertyDrawer
 		None = 0,
 		ExactObjectTypeValidation = 1,
 	}
-	
+
 	internal static Object ValidateObjectFieldAssignment(
-      Object[] references,
-      Type objType,
-      SerializedProperty property,
-      ObjectFieldValidatorOptions options)
-    {
-      if (references.Length != 0)
-      {
-        bool flag1 = DragAndDrop.objectReferences.Length != 0;
-        bool flag2 = references[0] != null && references[0] is Texture2D;
-        if (objType == typeof (Sprite) & flag2 & flag1)
-          return null;
-        if (property != null)
-        {
-          if (references[0] != null && ValidateObjectReferenceValue(property, references[0], options))
-          {
-            if (EditorSceneManager.preventCrossSceneReferences && CheckForCrossSceneReferencing(references[0], property.serializedObject.targetObject))
-              return null;
-            if (!(objType != null))
-              return references[0];
-            if (references[0] is GameObject && typeof (Component).IsAssignableFrom(objType))
-              references = ((GameObject) references[0]).GetComponents(typeof (Component));
-            foreach (Object reference in references)
-            {
-              if (reference != null && objType.IsAssignableFrom(reference.GetType()))
-                return reference;
-            }
-          }
-          string str = property.type;
-          if (property.type == "vector")
-            str = property.arrayElementType;
-          if (((str == "PPtr<Sprite>" ? 1 : (str == "PPtr<$Sprite>" ? 1 : 0)) & (flag2 ? 1 : 0) & (flag1 ? 1 : 0)) != 0)
-            return null;
-        }
-        else
-        {
-          if (references[0] != null && references[0] is GameObject && typeof (Component).IsAssignableFrom(objType))
-            references = ((GameObject) references[0]).GetComponents(typeof (Component));
-          foreach (Object reference in references)
-          {
-            if (reference != null && objType.IsAssignableFrom(reference.GetType()))
-              return reference;
-          }
-        }
-      }
-      return null;
-    }
-	
+		Object[] references,
+		Type objType,
+		SerializedProperty property,
+		ObjectFieldValidatorOptions options)
+	{
+		if (references.Length != 0)
+		{
+			bool flag1 = DragAndDrop.objectReferences.Length != 0;
+			bool flag2 = references[0] != null && references[0] is Texture2D;
+			if (objType == typeof(Sprite) & flag2 & flag1)
+				return null;
+			if (property != null)
+			{
+				if (references[0] != null && ValidateObjectReferenceValue(property, references[0], options))
+				{
+					if (EditorSceneManager.preventCrossSceneReferences && CheckForCrossSceneReferencing(references[0], property.serializedObject.targetObject))
+						return null;
+					if (!(objType != null))
+						return references[0];
+					if (references[0] is GameObject)
+						references = ((GameObject)references[0]).GetComponents(typeof(Component));
+					foreach (Object reference in references)
+					{
+						if (reference != null && objType.IsAssignableFrom(reference.GetType()))
+							return reference;
+					}
+				}
+				string str = property.type;
+				if (property.type == "vector")
+					str = property.arrayElementType;
+				if (((str == "PPtr<Sprite>" ? 1 : (str == "PPtr<$Sprite>" ? 1 : 0)) & (flag2 ? 1 : 0) & (flag1 ? 1 : 0)) != 0)
+					return null;
+			}
+			else
+			{
+				if (references[0] != null && references[0] is GameObject && typeof(Component).IsAssignableFrom(objType))
+					references = ((GameObject)references[0]).GetComponents(typeof(Component));
+				foreach (Object reference in references)
+				{
+					if (reference != null && objType.IsAssignableFrom(reference.GetType()))
+						return reference;
+				}
+			}
+		}
+		return null;
+	}
+
 	private static bool ValidateObjectReferenceValue(
 		SerializedProperty property,
 		Object obj,
 		ObjectFieldValidatorOptions options)
 	{
-		return (options & ObjectFieldValidatorOptions.ExactObjectTypeValidation) == ObjectFieldValidatorOptions.ExactObjectTypeValidation ? ValidateObjectReferenceValueExactForProperty(property, obj) : ValidateObjectReferenceValueForProperty(property, obj);
+		return (options & ObjectFieldValidatorOptions.ExactObjectTypeValidation) == ObjectFieldValidatorOptions.ExactObjectTypeValidation
+			? ValidateObjectReferenceValueExactForProperty(property, obj)
+			: ValidateObjectReferenceValueForProperty(property, obj);
 	}
-	
-	internal static Func<Object, Object, bool> CheckForCrossSceneReferencing = (Func<Object, Object, bool>)Delegate.CreateDelegate(typeof(Func<Object, Object, bool>), typeof(EditorGUI).GetMethod("CheckForCrossSceneReferencing", BindingFlags.Static | BindingFlags.NonPublic)!);
 
-	internal static readonly Func<SerializedProperty, Object, bool> ValidateObjectReferenceValueForProperty = (Func<SerializedProperty, Object, bool>)Delegate.CreateDelegate(typeof(Func<SerializedProperty, Object, bool>),
+	internal static Func<Object, Object, bool> CheckForCrossSceneReferencing = (Func<Object, Object, bool>)Delegate.CreateDelegate(typeof(Func<Object, Object, bool>),
+		typeof(EditorGUI).GetMethod("CheckForCrossSceneReferencing", BindingFlags.Static | BindingFlags.NonPublic)!);
+
+	internal static readonly Func<SerializedProperty, Object, bool> ValidateObjectReferenceValueForProperty = (Func<SerializedProperty, Object, bool>)Delegate.CreateDelegate(
+		typeof(Func<SerializedProperty, Object, bool>),
 		typeof(SerializedProperty).GetMethod("ValidateObjectReferenceValue", BindingFlags.Instance | BindingFlags.NonPublic)!);
-	
-	internal static readonly Func<SerializedProperty, Object, bool> ValidateObjectReferenceValueExactForProperty = (Func<SerializedProperty, Object, bool>)Delegate.CreateDelegate(typeof(Func<SerializedProperty, Object, bool>),
+
+	internal static readonly Func<SerializedProperty, Object, bool> ValidateObjectReferenceValueExactForProperty = (Func<SerializedProperty, Object, bool>)Delegate.CreateDelegate(
+		typeof(Func<SerializedProperty, Object, bool>),
 		typeof(SerializedProperty).GetMethod("ValidateObjectReferenceValueExact", BindingFlags.Instance | BindingFlags.NonPublic)!);
 
 	internal static bool GUIClip_enabled = true;
-	
+
 	internal enum ObjectFieldVisualType
 	{
 		IconAndText,
 		LargePreview,
 		MiniPreview,
 	}
-	
+
 	private static Rect GetButtonRect(ObjectFieldVisualType visualType, Rect position)
 	{
 		switch (visualType)
@@ -378,56 +358,68 @@ public class InterfaceFieldDrawer : PropertyDrawer
 	private static readonly Func<object> ObjectSelector_Get =
 		(Func<object>)Delegate.CreateDelegate(typeof(Func<object>), ObjectSelector_Type.GetProperty("get", BindingFlags.Static | BindingFlags.Public).GetMethod!);
 
-	private static readonly MethodInfo ObjectSelector_Show_Method = 
+	private static readonly MethodInfo ObjectSelector_Show_Method =
 		ObjectSelector_Type.GetMethod("Show", BindingFlags.Instance | BindingFlags.NonPublic, null, new Type[]
 		{
+			typeof(Object),
 			typeof(Type),
-			typeof(SerializedProperty),
+			typeof(Object),
 			typeof(bool),
 			typeof(List<int>),
 			typeof(Action<Object>),
-			typeof(Action<Object>)
+			typeof(Action<Object>),
+			typeof(bool)
 		}, null)!;
 
-	private static void ObjectSelectorShow(Type requiredType,
-		SerializedProperty property,
+	private static void ObjectSelectorShow(
+		UnityEngine.Object obj,
+		System.Type requiredType,
+		UnityEngine.Object objectBeingEdited,
 		bool allowSceneObjects,
 		List<int> allowedInstanceIDs = null,
-		Action<Object> onObjectSelectorClosed = null,
-		Action<Object> onObjectSelectedUpdated = null)
+		Action<UnityEngine.Object> onObjectSelectorClosed = null,
+		Action<UnityEngine.Object> onObjectSelectedUpdated = null,
+		bool showNoneItem = true)
 	{
 		ObjectSelector_Show_Method.Invoke(ObjectSelector_Get(), new object[]
 		{
+			obj,
 			requiredType,
-			property,
+			objectBeingEdited,
 			allowSceneObjects,
 			allowedInstanceIDs,
 			onObjectSelectorClosed,
-			onObjectSelectedUpdated
+			onObjectSelectedUpdated,
+			showNoneItem
 		});
 	}
 
 	private static readonly FieldInfo ObjectSelector_selectorId = ObjectSelector_Type.GetField("objectSelectorID", BindingFlags.Instance | BindingFlags.NonPublic);
 	private static readonly Action<object, int> ObjectSelector_selectorId_Set = (selector, id) => { ObjectSelector_selectorId.SetValue(selector, id); };
 	private static readonly Func<object, int> ObjectSelector_selectorId_Get = (selector) => (int)ObjectSelector_selectorId.GetValue(selector);
-	
+
 	private static void ObjectSelectorSetSelectorId(int id)
 	{
 		ObjectSelector_selectorId_Set.Invoke(ObjectSelector_Get.Invoke(), id);
 	}
-	
+
 	private static int ObjectSelectorGetSelectorId()
 	{
 		return ObjectSelector_selectorId_Get.Invoke(ObjectSelector_Get.Invoke());
 	}
-	
-	internal static Action<Object, Rect> PingObjectOrShowPreviewOnClick = (Action<Object, Rect>)Delegate.CreateDelegate(typeof(Action<Object, Rect>), typeof(EditorGUI).GetMethod("PingObjectOrShowPreviewOnClick", BindingFlags.Static | BindingFlags.NonPublic)!);
-	internal static Action<Material> PingObjectInSceneViewOnClick = (Action<Material>)Delegate.CreateDelegate(typeof(Action<Material>), typeof(EditorGUI).GetMethod("PingObjectInSceneViewOnClick", BindingFlags.Static | BindingFlags.NonPublic)!);
-	internal static Func<string, GUIContent> TempContent = (Func<string, GUIContent>)Delegate.CreateDelegate(typeof(Func<string, GUIContent>), typeof(EditorGUIUtility).GetMethod("TempContent", BindingFlags.Static | BindingFlags.NonPublic, null, new Type[]
-	{
-		typeof(string)
-	}, null)!);
-	
+
+	internal static Action<Object, Rect> PingObjectOrShowPreviewOnClick = (Action<Object, Rect>)Delegate.CreateDelegate(typeof(Action<Object, Rect>),
+		typeof(EditorGUI).GetMethod("PingObjectOrShowPreviewOnClick", BindingFlags.Static | BindingFlags.NonPublic)!);
+
+	internal static Action<Material> PingObjectInSceneViewOnClick =
+		(Action<Material>)Delegate.CreateDelegate(typeof(Action<Material>), typeof(EditorGUI).GetMethod("PingObjectInSceneViewOnClick", BindingFlags.Static | BindingFlags.NonPublic)!);
+
+	internal static Func<string, GUIContent> TempContent = (Func<string, GUIContent>)Delegate.CreateDelegate(typeof(Func<string, GUIContent>), typeof(EditorGUIUtility).GetMethod("TempContent",
+		BindingFlags.Static | BindingFlags.NonPublic, null, new Type[]
+		{
+			typeof(string)
+		}, null)!);
+
 	internal static GUIContent ObjectContent(
 		Object obj,
 		Type type,
@@ -436,7 +428,9 @@ public class InterfaceFieldDrawer : PropertyDrawer
 	{
 		if (validator == null)
 			validator = new ObjectFieldValidator(ValidateObjectFieldAssignment);
-		GUIContent guiContent = !(obj == null) || !(type == null) || property == null ? (property == null ? EditorGUIUtility.ObjectContent(obj, type) : ObjectContentv2(obj, type, property.objectReferenceInstanceIDValue)) : TempContent(ObjectReferenceStringValue(property));
+		GUIContent guiContent = (obj != null)
+			? ObjectContentv2(obj, type, property.objectReferenceInstanceIDValue)
+			: TempContent($"None ({type.Name})");
 		if (property != null && obj != null)
 		{
 			Object[] references = new Object[1]
@@ -459,22 +453,27 @@ public class InterfaceFieldDrawer : PropertyDrawer
 	private static GUIContent s_TypeMismatch = EditorGUIUtility.TrTextContent("Type mismatch");
 	private static GUIContent s_SceneMismatch = EditorGUIUtility.TrTextContent("Scene mismatch (cross scene references not supported)");
 	private static readonly GUIContent s_MixedValueContent = EditorGUIUtility.TrTextContent("—", "Mixed Values");
-	
+
 	internal static GameObject GetGameObjectFromObject(Object obj)
 	{
 		GameObject objectFromObject = obj as GameObject;
 		if (objectFromObject == null && obj is Component)
-			objectFromObject = ((Component) obj).gameObject;
+			objectFromObject = ((Component)obj).gameObject;
 		return objectFromObject;
 	}
-	
-	internal static Action BeginHandleMixedValueContentColor = (Action)Delegate.CreateDelegate(typeof(Action), typeof(EditorGUI).GetMethod("BeginHandleMixedValueContentColor", BindingFlags.Static | BindingFlags.NonPublic)!);
-	internal static Action EndHandleMixedValueContentColor = (Action)Delegate.CreateDelegate(typeof(Action), typeof(EditorGUI).GetMethod("BeginHandleMixedValueContentColor", BindingFlags.Static | BindingFlags.NonPublic)!);
+
+	internal static Action BeginHandleMixedValueContentColor =
+		(Action)Delegate.CreateDelegate(typeof(Action), typeof(EditorGUI).GetMethod("BeginHandleMixedValueContentColor", BindingFlags.Static | BindingFlags.NonPublic)!);
+
+	internal static Action EndHandleMixedValueContentColor =
+		(Action)Delegate.CreateDelegate(typeof(Action), typeof(EditorGUI).GetMethod("BeginHandleMixedValueContentColor", BindingFlags.Static | BindingFlags.NonPublic)!);
+
 	internal static Action<Rect, int, Object, GUIContent> DrawObjectFieldLargeThumb = (Action<Rect, int, Object, GUIContent>)Delegate.CreateDelegate(typeof(Action<Rect, int, Object, GUIContent>),
 		typeof(EditorGUI).GetMethod("DrawObjectFieldLargeThumb", BindingFlags.Static | BindingFlags.NonPublic)!);
+
 	internal static Action<Rect, int, Object, GUIContent> DrawObjectFieldMiniThumb = (Action<Rect, int, Object, GUIContent>)Delegate.CreateDelegate(typeof(Action<Rect, int, Object, GUIContent>),
 		typeof(EditorGUI).GetMethod("DrawObjectFieldLargeThumb", BindingFlags.Static | BindingFlags.NonPublic)!);
-	
+
 	private static bool ValidDroppedObject(
 		Object[] references,
 		Type objType,
@@ -490,17 +489,19 @@ public class InterfaceFieldDrawer : PropertyDrawer
 		errorString = string.Format("Type cannot be found: {0}. Containing file and class name must match.", reference.GetType());
 		return false;
 	}
-	
+
 	private static bool HasValidScript(Object obj)
 	{
 		MonoScript monoScript = FromScriptedObject(obj);
 		return !(monoScript == null) && !(monoScript.GetClass() == null);
 	}
-	
-	internal static Func<Object, MonoScript> FromScriptedObject = (Func<Object, MonoScript>)Delegate.CreateDelegate(typeof(Func<Object, MonoScript>), typeof(MonoScript).GetMethod("FromScriptedObject", BindingFlags.Static | BindingFlags.NonPublic)!);
-	internal static Func<SerializedProperty, string> ObjectReferenceStringValue = (Func<SerializedProperty, string>)Delegate.CreateDelegate(typeof(Func<SerializedProperty, string>), typeof(SerializedProperty).GetProperty("objectReferenceStringValue", BindingFlags.Instance | BindingFlags.NonPublic).GetMethod!);
 
-	
+	internal static Func<Object, MonoScript> FromScriptedObject =
+		(Func<Object, MonoScript>)Delegate.CreateDelegate(typeof(Func<Object, MonoScript>), typeof(MonoScript).GetMethod("FromScriptedObject", BindingFlags.Static | BindingFlags.NonPublic)!);
+
+	internal static Func<SerializedProperty, string> ObjectReferenceStringValue = (Func<SerializedProperty, string>)Delegate.CreateDelegate(typeof(Func<SerializedProperty, string>),
+		typeof(SerializedProperty).GetProperty("objectReferenceStringValue", BindingFlags.Instance | BindingFlags.NonPublic).GetMethod!);
+
 	private static UnityEngine.Object AssignSelectedObject(
 		SerializedProperty property,
 		ObjectFieldValidator validator,
@@ -519,11 +520,18 @@ public class InterfaceFieldDrawer : PropertyDrawer
 		return @object;
 	}
 
-	internal static Func<Object> ObjectSelectorGetCurrentObject = (Func<Object>)Delegate.CreateDelegate(typeof(Func<Object>), ObjectSelector_Type.GetMethod("GetCurrentObject", BindingFlags.Static | BindingFlags.Public)!);
-	internal static Func<Object, Type, int, GUIContent> ObjectContentv2 = (Func<Object, Type, int, GUIContent>)Delegate.CreateDelegate(typeof(Func<Object, Type, int, GUIContent>), typeof(EditorGUIUtility).GetMethod("ObjectContent", BindingFlags.Static | BindingFlags.NonPublic, null, new Type[]
-	{
-		typeof(Object), typeof(Type), typeof(int)
-	}, null)!);
+	internal static Action<SerializedProperty, object> SetManagedReferenceValueInternal =
+		(Action<SerializedProperty, object>)Delegate.CreateDelegate(typeof(Action<SerializedProperty, object>),
+			typeof(SerializedProperty).GetMethod("SetManagedReferenceValueInternal", BindingFlags.Instance | BindingFlags.NonPublic)!);
+
+	internal static Func<Object> ObjectSelectorGetCurrentObject =
+		(Func<Object>)Delegate.CreateDelegate(typeof(Func<Object>), ObjectSelector_Type.GetMethod("GetCurrentObject", BindingFlags.Static | BindingFlags.Public)!);
+
+	internal static Func<Object, Type, int, GUIContent> ObjectContentv2 = (Func<Object, Type, int, GUIContent>)Delegate.CreateDelegate(typeof(Func<Object, Type, int, GUIContent>),
+		typeof(EditorGUIUtility).GetMethod("ObjectContent", BindingFlags.Static | BindingFlags.NonPublic, null, new Type[]
+		{
+			typeof(Object), typeof(Type), typeof(int)
+		}, null)!);
 
 	public static bool IsScript(SerializedProperty property)
 	{
