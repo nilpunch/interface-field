@@ -74,7 +74,7 @@ public class WeaponSO : ScriptableObject, IWeapon
 {
 	public void Attack()
 	{
-		Debug.Log("SOOOOOOOO);
+		Debug.Log("SOOOOOOOO");
 	}
 }
 ```
