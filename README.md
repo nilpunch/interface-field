@@ -60,4 +60,4 @@ public class WeaponConsumer : MonoBehaviour
 }
 ```
 
-Interface implementors must simply implement the interface and thats it.
+3. Interface implementors only need to implement the interface — no additional setup required.
