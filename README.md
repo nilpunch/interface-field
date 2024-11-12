@@ -1,6 +1,6 @@
-# Interface field for UnityEngine.Object
+# Interface Field for UnityEngine.Object
 
-![image](https://github.com/user-attachments/assets/49f5f9b8-5a1a-4282-974a-a7b9f4d29830)
+![image](https://github.com/user-attachments/assets/c591803c-8430-4ff3-a533-d92c3de01809)
 
 A Unity package for serializing UnityEngine.Object using an interface field.  
 This leverages decompiled UnityEditor code, so stability may vary.
@@ -17,7 +17,7 @@ See minimum required Unity version in the `package.json` file.
 
 ## Overview
 
-Currently supports only drag-and-drop. Object selection via a window is a work in progress. 
+Currently supports only drag-and-drop. Object selection via a window is WIP. 
 
 What is allowed:
 - Renaming the interface field in your consumer
