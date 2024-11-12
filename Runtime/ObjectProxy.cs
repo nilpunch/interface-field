@@ -1,9 +1,12 @@
 using UnityEngine;
+using Object = UnityEngine.Object;
 
-namespace Plugins.InterfaceObjectField.Runtime
+namespace InterfaceField
 {
 	public class ObjectProxy
 	{
-		public Object Object;
+		[SerializeField] private Object _object;
+
+		public Object Object => _object;
 	}
 }

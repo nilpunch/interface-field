@@ -1,7 +1,7 @@
 ﻿using System;
 using UnityEngine;
 
-namespace Plugins.InterfaceObjectField.Runtime
+namespace InterfaceField
 {
 	public class ProxyAttribute : PropertyAttribute
 	{
@@ -9,6 +9,16 @@ namespace Plugins.InterfaceObjectField.Runtime
 
 		public ProxyAttribute(Type proxyType)
 		{
+			if (proxyType == null)
+			{
+				throw new Exception("Provided proxy type is null!");
+			}
+
+			if (!typeof(ObjectProxy).IsAssignableFrom(proxyType))
+			{
+				throw new Exception($"Provided proxy type {proxyType.GetFullGenericName()} must inherit {typeof(ObjectProxy).Name}!");
+			}
+
 			ProxyType = proxyType;
 		}
 	}

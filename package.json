@@ -1,0 +1,8 @@
+{
+  "name": "interface-field",
+  "version": "0.0.1",
+  "displayName": "Interface field",
+  "unity": "2021.2",
+  "description": "Serializer for UnityEngine.Object impementing some interface.",
+  "author": "nilpunch"
+}
